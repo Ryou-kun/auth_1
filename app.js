@@ -1,9 +1,11 @@
 //jshint esversion:6
-require('dotenv').config()
 const express = require('express');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
 const encrypt = require('mongoose-encryption');
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
+
 mongoose.Promise = global.Promise;
 
 main().catch(err => console.log(err));
@@ -16,8 +18,6 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String
 });
-
-userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: [password] });
 
 const User = new mongoose.model("User", userSchema);
 
@@ -47,12 +47,14 @@ app.route("/login")
     User.findOne({ email: user })
     .then((result) => {
       if (result) {
-        if (result.password === password) {
-          res.render("secrets");
+        bcrypt.compare(password, result.password, function (err, results) {
+          if (results) {
+            res.send("secret");
         }
+      });
       }
     }).catch((err) => {
-      
+      res.send(err);
     });
 });
 app.route("/register")
@@ -60,17 +62,20 @@ app.route("/register")
     res.render("register")
   })
   .post(async function (req, res) {
-    const user = await new User({
-      email : req.body.username,
-      password : req.body.password
-    });
-
-    await user.save()
-      .then((result) => {
-        res.render("secrets");
-      }).catch((err) => {
-        res.send(err);
+    bcrypt.hash(req.body.password, saltRounds, async function(err, hash) {
+      const user = await new User({
+        email : req.body.username,
+        password : hash
       });
+  
+      await user.save()
+        .then((result) => {
+          res.render("secrets");
+        }).catch((err) => {
+          res.send(err);
+        });
+    });
+    
 });
 
 
